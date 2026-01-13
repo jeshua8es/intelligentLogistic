@@ -1,113 +1,197 @@
-# inventory/models.py
-"""
-Modelos de Django para el módulo de inventario.
-
-Un modelo en Django:
-1. Representa una tabla en la base de datos
-2. Cada atributo es una columna
-3. Django crea automáticamente el SQL
-
-Vamos a crear ProductoLocal para practicar con SQLite local.
-"""
-
+# backend/inventory/models.py
 from django.db import models
+import uuid
 
-class ProductoLocal(models.Model):
-    """
-    Modelo para productos almacenados localmente en SQLite.
-    
-    Campos (columnas de la tabla):
-    - id: Se crea automáticamente (Integer, Primary Key, Auto-increment)
-    - nombre: Texto corto (CharField → VARCHAR en SQL)
-    - descripcion: Texto largo (TextField → TEXT en SQL)
-    - cantidad: Número entero (IntegerField → INTEGER en SQL)
-    - precio: Número decimal (DecimalField → DECIMAL en SQL)
-    - fecha_creacion: Fecha/hora automática (DateTimeField → DATETIME en SQL)
-    - activo: Verdadero/Falso (BooleanField → BOOLEAN en SQL)
-    """
-    
-    # CharField = Campo de texto con longitud máxima
-    nombre = models.CharField(
-        max_length=100,  # Máximo 100 caracteres
-        verbose_name="Nombre del producto",
-        help_text="Nombre descriptivo del producto"
-    )
-    
-    # TextField = Campo de texto largo (sin límite de longitud)
-    descripcion = models.TextField(
-        verbose_name="Descripción",
-        help_text="Descripción detallada del producto",
-        blank=True,   # Puede estar vacío en formularios
-        null=True     # Puede ser NULL en la base de datos
-    )
-    
-    # IntegerField = Número entero
-    cantidad = models.IntegerField(
-        verbose_name="Cantidad en stock",
-        default=0,    # Valor por defecto si no se especifica
-        help_text="Cantidad disponible en inventario"
-    )
-    
-    # DecimalField = Número decimal con precisión específica
-    precio = models.DecimalField(
-        max_digits=10,     # Máximo 10 dígitos totales
-        decimal_places=2,  # 2 decimales
-        verbose_name="Precio unitario",
-        help_text="Precio en COP (Pesos Colombianos)"
-    )
-    
-    # DateTimeField = Fecha y hora
-    fecha_creacion = models.DateTimeField(
-        auto_now_add=True,  # Se establece automáticamente al crear
-        verbose_name="Fecha de creación"
-    )
-    
-    # BooleanField = Verdadero/Falso
-    activo = models.BooleanField(
-        default=True,  # Por defecto activo
-        verbose_name="¿Activo?",
-        help_text="Indica si el producto está activo en el sistema"
-    )
-    
-    class Meta:
-        """
-        Configuraciones adicionales del modelo.
-        Meta = Metadatos (datos sobre los datos)
-        """
-        verbose_name = "Producto Local"           # Nombre singular en admin
-        verbose_name_plural = "Productos Locales" # Nombre plural en admin
-        ordering = ['-fecha_creacion']  # Ordenar por fecha descendente
-        # -fecha_creacion = Más recientes primero
+# Si necesitas referenciar modelos de otras apps
+from django.conf import settings
+
+# =================== MODELOS BASE (si no existen) ===================
+
+class Product(models.Model):
+    """Productos del sistema"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    product_code = models.CharField(max_length=100, unique=True)
+    product_name = models.CharField(max_length=255)
+    category = models.CharField(max_length=100)
+    requires_refrigeration = models.BooleanField(default=False)
+    min_temperature = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    max_temperature = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    special_conditions = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
-        """
-        Representación en texto del modelo.
-        Se muestra en: admin, shell, logs, etc.
-        """
-        return f"{self.nombre} ({self.cantidad} unidades)"
+        return f"{self.product_code} - {self.product_name}"
+
+class Region(models.Model):
+    """Regiones geográficas"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100, unique=True)
+    climate_type = models.CharField(max_length=50)
+    description = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     
-    # ============================================
-    # MÉTODOS PERSONALIZADOS (no son campos en BD)
-    # ============================================
+    def __str__(self):
+        return self.name
+
+class Branch(models.Model):
+    """Sucursales"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    branch_code = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=255)
+    region = models.ForeignKey(Region, on_delete=models.PROTECT, related_name='branches')
+    address = models.TextField()
+    contact_phone = models.CharField(max_length=20)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     
-    def valor_total(self):
-        """
-        Calcula el valor total del stock.
-        No se almacena en BD, se calcula cuando se necesita.
-        """
-        try:
-            return self.cantidad * self.precio
-        except:
-            return 0
+    def __str__(self):
+        return f"{self.branch_code} - {self.name}"
+
+class SpecialZone(models.Model):
+    """Zonas especiales con condiciones específicas (ej: refrigeración)"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    zone_code = models.CharField(max_length=50, unique=True)
+    zone_name = models.CharField(max_length=255)
+    region_name = models.CharField(max_length=100)  # Para match con special_zones de Supabase
+    has_refrigeration_priority = models.BooleanField(default=False)
+    additional_requirements = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     
-    def tiene_stock(self):
-        """Verifica si hay stock disponible."""
-        return self.cantidad > 0
+    def __str__(self):
+        return f"{self.zone_code} - {self.zone_name}"
+
+# =================== MODELOS NUEVOS (CRUD Inventario) ===================
+
+class GeneralInventory(models.Model):
+    """
+    Inventario general - Tabla equivalente a general_inventory en Supabase
+    """
+    product = models.OneToOneField(
+        Product, 
+        on_delete=models.CASCADE, 
+        primary_key=True,
+        related_name='general_inventory'
+    )
+    quantity = models.IntegerField(default=0)
+    min_stock = models.IntegerField(null=True, blank=True)
+    max_stock = models.IntegerField(null=True, blank=True)
+    location = models.TextField(null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
+    last_updated = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     
-    def esta_activo(self):
-        """Verifica si el producto está activo."""
-        return self.activo
+    class Meta:
+        verbose_name = "Inventario General"
+        verbose_name_plural = "Inventarios Generales"
+        db_table = 'general_inventory'  # Para que coincida con Supabase
     
-    def puede_venderse(self):
-        """Verifica si el producto puede venderse."""
-        return self.activo and self.cantidad > 0 and self.precio > 0
+    def __str__(self):
+        return f"{self.product}: {self.quantity} unidades"
+    
+    @property
+    def status(self):
+        """Estado del inventario basado en niveles"""
+        if self.min_stock and self.quantity <= self.min_stock:
+            return "low"
+        elif self.max_stock and self.quantity >= self.max_stock:
+            return "high"
+        return "normal"
+
+class RegionalInventory(models.Model):
+    """
+    Inventario por sucursal - Tabla equivalente a regional_inventory en Supabase
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    product = models.ForeignKey(
+        Product, 
+        on_delete=models.CASCADE,
+        related_name='regional_inventories'
+    )
+    region = models.ForeignKey(
+        Region, 
+        on_delete=models.CASCADE,
+        related_name='regional_inventories'
+    )
+    branch = models.ForeignKey(
+        Branch, 
+        on_delete=models.CASCADE,
+        related_name='regional_inventories'
+    )
+    product_sku = models.CharField(max_length=100)
+    product_name = models.CharField(max_length=255)
+    quantity = models.IntegerField(default=0)
+    min_temperature = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    max_temperature = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    special_conditions = models.TextField(null=True, blank=True)
+    last_updated = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = "Inventario Regional"
+        verbose_name_plural = "Inventarios Regionales"
+        db_table = 'regional_inventory'  # Para que coincida con Supabase
+        unique_together = ['product', 'branch']  # IMPORTANTE: Igual que en Supabase
+        constraints = [
+            models.UniqueConstraint(
+                fields=['product', 'branch'], 
+                name='unique_product_branch'
+            )
+        ]
+    
+    def __str__(self):
+        return f"{self.product} en {self.branch}: {self.quantity} unidades"
+
+class InventoryTransaction(models.Model):
+    """
+    Auditoría de transacciones - Tabla equivalente a inventory_transactions en Supabase
+    """
+    TRANSACTION_TYPES = [
+        ('initial', 'Stock Inicial'),
+        ('transfer', 'Transferencia'),
+        ('adjustment', 'Ajuste'),
+        ('sale', 'Venta'),
+        ('return', 'Devolución'),
+        ('waste', 'Pérdida'),
+    ]
+    
+    LOCATION_TYPES = [
+        ('general', 'Inventario General'),
+        ('regional', 'Inventario Regional'),
+        ('branch', 'Sucursal'),
+        ('external', 'Externo'),
+        ('supplier', 'Proveedor'),
+        ('customer', 'Cliente'),
+        ('waste', 'Pérdida'),
+    ]
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='transactions')
+    from_location_type = models.CharField(max_length=20, choices=LOCATION_TYPES, null=True, blank=True)
+    from_location_id = models.UUIDField(null=True, blank=True)
+    to_location_type = models.CharField(max_length=20, choices=LOCATION_TYPES)
+    to_location_id = models.UUIDField(null=True, blank=True)
+    quantity = models.IntegerField()
+    notes = models.TextField(null=True, blank=True)
+    reference_id = models.UUIDField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = "Transacción de Inventario"
+        verbose_name_plural = "Transacciones de Inventario"
+        db_table = 'inventory_transactions'  # Para que coincida con Supabase
+        indexes = [
+            models.Index(fields=['product', 'created_at']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['transaction_type']),
+        ]
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.get_transaction_type_display()} - {self.product}: {self.quantity}"
