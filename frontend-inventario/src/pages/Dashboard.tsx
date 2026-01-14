@@ -1,315 +1,225 @@
-import { debug, error } from '../utils/logger'
-import React, { useEffect, useState } from 'react'
-import { supabase } from '../services/supabase'
-import { useAuthStore } from '../stores/authStore'
+import React from 'react'
 import { 
-  Package, 
-  Truck, 
-  Thermometer, 
-  MapPin,
-  TrendingUp,
-  AlertCircle,
-  User,
-  Shield,
-  Clock,
-  Calendar
+  Package, Truck, BarChart3, Users, 
+  Clock, CheckCircle, AlertTriangle, 
+  DollarSign, ShoppingCart, Warehouse,
+  RefreshCw
 } from 'lucide-react'
 
-interface DashboardStats {
-  totalProducts: number
-  totalShipments: number
-  refrigeratedProducts: number
-  pacificShipments: number
-  lowStockItems: number
-  pendingShipments: number
-}
-
 const Dashboard: React.FC = () => {
-  const [stats, setStats] = useState<DashboardStats>({
-    totalProducts: 0,
-    totalShipments: 0,
-    refrigeratedProducts: 0,
-    pacificShipments: 0,
-    lowStockItems: 0,
-    pendingShipments: 0
-  })
-  const [loading, setLoading] = useState(true)
-  const [recentShipments, setRecentShipments] = useState<any[]>([])
-  const [lowStockProducts, setLowStockProducts] = useState<any[]>([])
-  
-  const { user, session } = useAuthStore()
-
-  useEffect(() => {
-    fetchDashboardData()
-  }, [])
-
-  const fetchDashboardData = async () => {
-    if (!supabase) {
-      // Supabase no está configurado; evitar llamadas remotas
-      setLoading(false)
-      return
-    }
-
-    try {
-      // Obtener estadísticas
-      const [
-        { data: products },
-        { data: shipments },
-        { data: refrigerated },
-        { data: pacificShipments },
-        { data: lowStock },
-        { data: pending }
-      ] = await Promise.all([
-        supabase.from('regional_inventory').select('*'),
-        supabase.from('shipments').select('*'),
-        supabase.from('products').select('*').eq('requires_refrigeration', true),
-        supabase.from('shipments').select('*').eq('destination_zone_id', 'zona-pacifico'),
-        supabase.from('regional_inventory').select('*').lt('quantity', 10),
-        supabase.from('shipments').select('*').eq('status', 'pending')
-      ])
-
-      // Obtener despachos recientes
-      const { data: recent } = await supabase
-        .from('shipments')
-        .select(`
-          *,
-          branches(name),
-          special_zones(zone_name)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(5)
-
-      setStats({
-        totalProducts: products?.length || 0,
-        totalShipments: shipments?.length || 0,
-        refrigeratedProducts: refrigerated?.length || 0,
-        pacificShipments: pacificShipments?.length || 0,
-        lowStockItems: lowStock?.length || 0,
-        pendingShipments: pending?.length || 0
-      })
-
-      setRecentShipments(recent || [])
-      setLowStockProducts(lowStock || [])
-    } catch (error) {
-      error('Error fetching dashboard data:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const statCards = [
-    {
-      title: 'Total Productos',
-      value: stats.totalProducts,
-      icon: Package,
-      color: 'bg-blue-500',
-      textColor: 'text-blue-600'
+  const stats = [
+    { 
+      title: 'Inventario Total', 
+      value: '1,248', 
+      change: '+12.5%', 
+      icon: <Package className="h-6 w-6" />,
+      color: 'bg-blue-500'
     },
-    {
-      title: 'Despachos Totales',
-      value: stats.totalShipments,
-      icon: Truck,
-      color: 'bg-green-500',
-      textColor: 'text-green-600'
+    { 
+      title: 'Pedidos Hoy', 
+      value: '56', 
+      change: '+8.2%', 
+      icon: <ShoppingCart className="h-6 w-6" />,
+      color: 'bg-green-500'
     },
-    {
-      title: 'Productos Refrigerados',
-      value: stats.refrigeratedProducts,
-      icon: Thermometer,
-      color: 'bg-purple-500',
-      textColor: 'text-purple-600'
+    { 
+      title: 'En Despacho', 
+      value: '23', 
+      change: '-3.1%', 
+      icon: <Truck className="h-6 w-6" />,
+      color: 'bg-orange-500'
     },
-    {
-      title: 'Despachos al Pacífico',
-      value: stats.pacificShipments,
-      icon: MapPin,
-      color: 'bg-orange-500',
-      textColor: 'text-orange-600'
-    },
-    {
-      title: 'Stock Bajo',
-      value: stats.lowStockItems,
-      icon: AlertCircle,
-      color: 'bg-red-500',
-      textColor: 'text-red-600'
-    },
-    {
-      title: 'Despachos Pendientes',
-      value: stats.pendingShipments,
-      icon: TrendingUp,
-      color: 'bg-yellow-500',
-      textColor: 'text-yellow-600'
+    { 
+      title: 'Ingresos Mensual', 
+      value: '$24,580', 
+      change: '+18.7%', 
+      icon: <DollarSign className="h-6 w-6" />,
+      color: 'bg-purple-500'
     }
   ]
 
-  // Calcular tiempo restante de sesión
-  const getSessionTimeLeft = () => {
-    if (!session?.expires_at) return 'Desconocido'
-    
-    const expiresAt = new Date(session.expires_at * 1000)
-    const now = new Date()
-    const diffMs = expiresAt.getTime() - now.getTime()
-    const diffMins = Math.floor(diffMs / 60000)
-    
-    if (diffMins < 0) return 'Expirada'
-    if (diffMins < 60) return `${diffMins} min`
-    
-    const diffHours = Math.floor(diffMins / 60)
-    return `${diffHours} h`
-  }
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    )
-  }
+  const recentActivities = [
+    { id: 1, action: 'Pedido completado', user: 'Juan Pérez', time: 'Hace 5 min', status: 'success' },
+    { id: 2, action: 'Nueva orden recibida', user: 'María García', time: 'Hace 12 min', status: 'info' },
+    { id: 3, action: 'Producto agotado', user: 'Carlos López', time: 'Hace 25 min', status: 'warning' },
+    { id: 4, action: 'Despacho programado', user: 'Ana Martínez', time: 'Hace 1 hora', status: 'info' },
+    { id: 5, action: 'Inventario actualizado', user: 'Sistema', time: 'Hace 2 horas', status: 'success' }
+  ]
 
   return (
-    <div className="space-y-6">
-      {/* Welcome header with user info */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">
-              👋 ¡Hola, {user?.email?.split('@')[0] || 'Usuario'}!
-            </h1>
-            <p className="text-gray-600 mt-1">
-              Bienvenido al sistema de gestión logística
-            </p>
+    <div className="p-4 space-y-4">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard de Logística</h1>
+          <p className="text-gray-600">Bienvenido al sistema de gestión inteligente</p>
+        </div>
+        <div className="flex items-center space-x-4">
+          <div className="text-sm text-gray-500">
+            Actualizado: {new Date().toLocaleTimeString()}
           </div>
-          
-          {/* Session info */}
-          <div className="mt-4 md:mt-0 flex flex-wrap gap-4">
-            <div className="flex items-center text-sm text-gray-600">
-              <User className="h-4 w-4 mr-2" />
-              <span>{user?.email}</span>
-            </div>
-            <div className="flex items-center text-sm text-gray-600">
-              <Shield className="h-4 w-4 mr-2" />
-              <span>JWT: {session?.access_token?.substring(0, 15)}...</span>
-            </div>
-            <div className="flex items-center text-sm text-gray-600">
-              <Clock className="h-4 w-4 mr-2" />
-              <span>Sesión: {getSessionTimeLeft()}</span>
-            </div>
-          </div>
+          <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+            <RefreshCw className="h-4 w-4 inline mr-2" />
+            Actualizar
+          </button>
         </div>
       </div>
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {statCards.map((stat, index) => (
-          <div key={index} className="bg-white rounded-lg shadow p-6">
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {stats.map((stat, index) => (
+          <div key={index} className="bg-white rounded-xl shadow-md p-6 border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">{stat.title}</p>
                 <p className="text-2xl font-bold mt-2">{stat.value}</p>
+                <p className={`text-sm mt-1 ${stat.change.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
+                  {stat.change} vs mes anterior
+                </p>
               </div>
-              <div className={`p-3 rounded-full ${stat.color} bg-opacity-10`}>
-                <stat.icon className={`h-6 w-6 ${stat.textColor}`} />
+              <div className={`${stat.color} p-3 rounded-full text-white`}>
+                {stat.icon}
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Despachos Recientes */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b">
-            <h2 className="text-lg font-semibold text-gray-800">Despachos Recientes</h2>
-          </div>
-          <div className="p-6">
+      {/* Two Columns Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column - Activity */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Recent Activity */}
+          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-200">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold text-gray-900">Actividad Reciente</h2>
+              <button className="text-sm text-blue-600 hover:text-blue-800">Ver todo</button>
+            </div>
             <div className="space-y-4">
-              {recentShipments.map((shipment) => (
-                <div key={shipment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="font-medium text-gray-800">{shipment.shipment_code}</p>
-                    <p className="text-sm text-gray-600">
-                      {shipment.branches?.name} → {shipment.special_zones?.zone_name}
-                    </p>
-                  </div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    shipment.status === 'delivered' ? 'bg-green-100 text-green-800' :
-                    shipment.status === 'in_transit' ? 'bg-blue-100 text-blue-800' :
-                    'bg-yellow-100 text-yellow-800'
+              {recentActivities.map((activity) => (
+                <div key={activity.id} className="flex items-center p-3 hover:bg-gray-50 rounded-lg">
+                  <div className={`p-2 rounded-full mr-4 ${
+                    activity.status === 'success' ? 'bg-green-100 text-green-600' :
+                    activity.status === 'warning' ? 'bg-yellow-100 text-yellow-600' :
+                    'bg-blue-100 text-blue-600'
                   }`}>
-                    {shipment.status === 'delivered' ? 'Entregado' :
-                     shipment.status === 'in_transit' ? 'En tránsito' : 'Pendiente'}
-                  </span>
+                    {activity.status === 'success' ? <CheckCircle className="h-5 w-5" /> :
+                     activity.status === 'warning' ? <AlertTriangle className="h-5 w-5" /> :
+                     <Clock className="h-5 w-5" />}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium">{activity.action}</p>
+                    <p className="text-sm text-gray-500">por {activity.user}</p>
+                  </div>
+                  <div className="text-sm text-gray-500">{activity.time}</div>
                 </div>
               ))}
             </div>
           </div>
+
+          {/* Quick Actions */}
+          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900 mb-6">Acciones Rápidas</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <button className="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
+                <Package className="h-8 w-8 text-blue-600 mb-2" />
+                <span className="text-sm font-medium">Nuevo Producto</span>
+              </button>
+              <button className="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
+                <ShoppingCart className="h-8 w-8 text-green-600 mb-2" />
+                <span className="text-sm font-medium">Crear Orden</span>
+              </button>
+              <button className="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
+                <Truck className="h-8 w-8 text-orange-600 mb-2" />
+                <span className="text-sm font-medium">Programar Despacho</span>
+              </button>
+              <button className="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
+                <BarChart3 className="h-8 w-8 text-purple-600 mb-2" />
+                <span className="text-sm font-medium">Ver Reportes</span>
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* Productos con Stock Bajo */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b">
-            <h2 className="text-lg font-semibold text-gray-800">Stock Bajo (≤ 10 unidades)</h2>
-          </div>
-          <div className="p-6">
+        {/* Right Column - Summary */}
+        <div className="space-y-6">
+          {/* Inventory Status */}
+          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Estado de Inventario</h2>
             <div className="space-y-4">
-              {lowStockProducts.map((product) => (
-                <div key={product.id} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
-                  <div>
-                    <p className="font-medium text-gray-800">{product.product_name}</p>
-                    <p className="text-sm text-gray-600">Código: {product.product_code}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-red-600 font-bold">Stock: {product.quantity}</p>
-                    <p className="text-xs text-gray-500">Mínimo: 10</p>
-                  </div>
+              <div>
+                <div className="flex justify-between text-sm mb-1">
+                  <span>Disponible</span>
+                  <span className="font-medium">85%</span>
                 </div>
-              ))}
-              {lowStockProducts.length === 0 && (
-                <p className="text-center text-gray-500 py-4">Todos los productos tienen stock suficiente</p>
-              )}
+                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-green-500" style={{ width: '85%' }}></div>
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between text-sm mb-1">
+                  <span>En uso</span>
+                  <span className="font-medium">12%</span>
+                </div>
+                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-500" style={{ width: '12%' }}></div>
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between text-sm mb-1">
+                  <span>Bajo stock</span>
+                  <span className="font-medium">3%</span>
+                </div>
+                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-yellow-500" style={{ width: '3%' }}></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* User Info */}
+          <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl shadow-md p-6 text-white">
+            <div className="flex items-center mb-4">
+              <div className="bg-white/20 p-3 rounded-full mr-4">
+                <Users className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Sistema de Logística Inteligente</h3>
+                <p className="text-sm opacity-90">prueba@correo.com</p>
+              </div>
+            </div>
+            <p className="text-sm opacity-90 mb-4">
+              Gestión completa de inventario, despachos y seguimiento en tiempo real.
+            </p>
+            <div className="flex space-x-2">
+              <span className="bg-white/20 px-3 py-1 rounded-full text-xs">Admin</span>
+              <span className="bg-white/20 px-3 py-1 rounded-full text-xs">Logística</span>
+              <span className="bg-white/20 px-3 py-1 rounded-full text-xs">Dashboard</span>
+            </div>
+          </div>
+
+          {/* Alerts */}
+          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Alertas</h2>
+            <div className="space-y-3">
+              <div className="flex items-center p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <AlertTriangle className="h-5 w-5 text-yellow-600 mr-3" />
+                <div>
+                  <p className="font-medium text-sm">3 productos con stock bajo</p>
+                  <p className="text-xs text-gray-600">Revisar inventario</p>
+                </div>
+              </div>
+              <div className="flex items-center p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <Clock className="h-5 w-5 text-blue-600 mr-3" />
+                <div>
+                  <p className="font-medium text-sm">2 despachos pendientes</p>
+                  <p className="text-xs text-gray-600">Programar para hoy</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Debug panel (solo desarrollo) */}
-      {import.meta.env.DEV && (
-        <div className="bg-gray-800 text-white rounded-lg shadow p-6 mt-6">
-          <h3 className="text-lg font-semibold mb-4">🔍 Información de Debug (JWT)</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-gray-400">Usuario ID:</p>
-              <code className="text-green-300 break-all">{user?.id}</code>
-            </div>
-            <div>
-              <p className="text-gray-400">Email:</p>
-              <code className="text-green-300">{user?.email}</code>
-            </div>
-            <div>
-              <p className="text-gray-400">Expira:</p>
-              <code className="text-green-300">
-                {session?.expires_at ? new Date(session.expires_at * 1000).toLocaleString() : 'N/A'}
-              </code>
-            </div>
-            <div>
-              <p className="text-gray-400">Token (primeros 30 chars):</p>
-              <code className="text-green-300 break-all">
-                {session?.access_token?.substring(0, 30)}...
-              </code>
-            </div>
-          </div>
-          <button
-            onClick={() => {
-              debug('🗝️ JWT completo:', session?.access_token)
-              debug('👤 Usuario completo:', user)
-              debug('📋 Sesión completa:', session)
-            }}
-            className="mt-4 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm"
-          >
-            Mostrar en consola
-          </button>
-        </div>
-      )}
     </div>
   )
 }
