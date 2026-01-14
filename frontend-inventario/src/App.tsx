@@ -1,9 +1,7 @@
 ﻿import { useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
-import { supabase } from './services/supabase'
-
-import './index.css';
+import './index.css'
 
 // Layouts & Pages
 import DashboardLayout from './layouts/DashboardLayout'
@@ -15,39 +13,33 @@ import ProtectedRoute from './components/auth/ProtectedRoute'
 import LoadingSpinner from './components/ui/LoadingSpinner'
 
 function App() {
-  const { loading, setLoading } = useAuthStore()
-
+  const initializeAuth = useAuthStore(state => state.initializeAuth)
+  
   useEffect(() => {
-    // Verificar sesión al iniciar
-    if (!supabase) {
-      useAuthStore.getState().setSession(null)
-      useAuthStore.getState().setUser(null)
-      setLoading(false)
-      return
-    }
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      useAuthStore.getState().setSession(session)
-      useAuthStore.getState().setUser(session?.user ?? null)
-      setLoading(false)
-    })
-  }, [setLoading])
-
-  if (loading) {
-    return <LoadingSpinner fullScreen />
-  }
+    // Inicializar autenticación al cargar la app
+    initializeAuth()
+  }, [initializeAuth])
 
   return (
     <Router>
       <Routes>
+        {/* Ruta pública */}
         <Route path="/login" element={<Login />} />
         
-        <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
+        {/* Rutas protegidas */}
+        <Route element={
+          <ProtectedRoute>
+            <DashboardLayout />
+          </ProtectedRoute>
+        }>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/inventory" element={<Inventory />} />
           <Route path="/shipments" element={<Shipments />} />
         </Route>
+        
+        {/* Ruta 404 */}
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Router>
   )
