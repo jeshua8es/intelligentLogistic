@@ -1,6 +1,9 @@
 // src/components/Sidebar.tsx - VERSIÓN COMPATIBLE CON DashboardLayout
 import React, { useState } from 'react'
 import { NavLink } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../stores/authStore';
+
 import { 
   LayoutDashboard, 
   Package, 
@@ -36,7 +39,35 @@ const Sidebar: React.FC<SidebarProps> = ({
   onMobileToggle,
   onMobileClose 
 }) => {
+
   const [inventoryOpen, setInventoryOpen] = useState(true)
+   const navigate = useNavigate()
+  const { logout } = useAuthStore() // Añade esto
+
+  const handleLogout = async () => {
+    try {
+      console.log('👋 Cerrando sesión...')
+      
+      // 1. Ejecutar logout del store
+      await logout()
+      
+      // 2. Cerrar menú móvil si está abierto
+      if (onMobileClose) onMobileClose()
+      
+      // 3. Redirigir a login
+      navigate('/login', { replace: true })
+      
+      // 4. Forzar recarga para limpiar estado
+      setTimeout(() => {
+        window.location.reload()
+      }, 100)
+      
+    } catch (error) {
+      console.error('❌ Error al cerrar sesión:', error)
+      // Si falla, igual redirigir
+      navigate('/login', { replace: true })
+    }
+  }
 
   const menuItems = [
     { 
@@ -105,11 +136,11 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Sidebar */}
       <div className={`
-        fixed lg:static inset-y-0 left-0 z-40
-        w-64 bg-gradient-to-b from-gray-900 to-gray-950 text-white h-screen flex flex-col
-        transform transition-transform duration-300 ease-in-out
-        ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-        shadow-2xl
+         fixed lg:static inset-y-0 left-0 z-40
+  w-64 bg-gradient-to-b from-gray-900 to-gray-950 text-white h-screen flex flex-col
+  transform transition-transform duration-300 ease-in-out
+  ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+  shadow-2xl
       `}>
         {/* Logo Section */}
         <div className="p-6 border-b border-gray-800">
@@ -268,12 +299,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Logout Button */}
           <button
-            onClick={() => {
-              // Aquí iría tu lógica de logout
-              console.log('Logout clicked')
-            }}
-            className="flex items-center justify-center space-x-2 w-full p-3 rounded-lg bg-gradient-to-r from-red-900/30 to-red-800/20 text-red-300 hover:from-red-800/40 hover:to-red-700/30 hover:text-red-200 transition-all border border-red-900/20"
-          >
+  onClick={handleLogout} // ← Cambia esto
+  className="flex items-center justify-center space-x-2 w-full p-3 rounded-lg bg-gradient-to-r from-red-900/30 to-red-800/20 text-red-300 hover:from-red-800/40 hover:to-red-700/30 hover:text-red-200 transition-all border border-red-900/20"
+>
             <LogOut className="h-4 w-4" />
             <span className="font-medium">Cerrar Sesión</span>
           </button>

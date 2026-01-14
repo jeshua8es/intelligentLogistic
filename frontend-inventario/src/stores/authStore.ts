@@ -1,188 +1,135 @@
-﻿// src/stores/authStore.ts - VERSIÓN QUE FUNCIONA AHORA MISMO
-import { create } from "zustand";
-import { createClient } from '@supabase/supabase-js'; // Añade esta línea
+﻿import { create } from "zustand";
 
-// Cliente Supabase (modo desarrollo)
-const getSupabaseClient = () => {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://tu-proyecto.supabase.co';
-  const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'tu-clave-publica';
-  
-  console.log('🔧 Configurando Supabase...');
-  
-  // Validar si las credenciales son reales o de ejemplo
-  const isDemoMode = supabaseUrl.includes('tu-proyecto') || supabaseKey.includes('tu-clave');
-  
-  if (isDemoMode) {
-    console.warn('⚠️ MODO DESARROLLO: Usando autenticación simulada');
-    console.log('📧 Usa: prueba@correo.com / 123456');
-  } else {
-    console.log('✅ Credenciales Supabase configuradas');
-  }
-  
-  return createClient(supabaseUrl, supabaseKey, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true
-    }
-  });
-};
+interface User {
+  id: string;
+  email: string;
+  name?: string;
+  role?: string;
+}
 
-const supabase = getSupabaseClient();
+interface AuthStore {
+  user: User | null;
+  loading: boolean;
+  error: string | null;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  clearError: () => void;
+  initializeAuth: () => void;
+  clearAuth: () => void; // Nueva función
+}
 
-export const useAuthStore = create((set) => ({
+export const useAuthStore = create<AuthStore>((set) => ({
   user: null,
   loading: false,
   error: null,
 
+  // Inicializar autenticación - MODIFICADO: No restaurar automáticamente
   initializeAuth: () => {
     console.log('🔄 Inicializando autenticación...');
     
-    // 1. Primero intentar con localStorage (modo desarrollo)
+    // SOLO para debug: mostrar estado actual
     const storedUser = localStorage.getItem('auth_user');
-    if (storedUser) {
-      try {
-        const user = JSON.parse(storedUser);
-        set({ user });
-        console.log('✅ Usuario recuperado de localStorage:', user.email);
-        return;
-      } catch (error) {
-        localStorage.removeItem('auth_user');
-      }
-    }
+    console.log('📦 Usuario en localStorage:', storedUser ? 'SÍ' : 'NO');
     
-    // 2. Si no hay en localStorage, verificar Supabase
-    const checkSupabaseSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          const user = {
-            id: session.user.id,
-            email: session.user.email || '',
-            name: session.user.user_metadata?.name || ''
-          };
-          set({ user });
-          console.log('✅ Sesión Supabase activa:', user.email);
-        }
-      } catch (error) {
-        console.log('ℹ️ No hay sesión Supabase activa');
-      }
-    };
-    
-    checkSupabaseSession();
+    // Limpiar errores pero NO restaurar usuario
     set({ error: null });
+    
+    // NOTA: Comentamos la restauración automática
+    // if (storedUser) {
+    //   try {
+    //     const user = JSON.parse(storedUser);
+    //     set({ user });
+    //     console.log('✅ Usuario restaurado:', user.email);
+    //   } catch (error) {
+    //     console.error('❌ Error parsing user:', error);
+    //     localStorage.removeItem('auth_user');
+    //   }
+    // }
   },
 
-  login: async (email, password) => {
+  // Login - MODIFICADO para ser más claro
+  login: async (email: string, password: string) => {
     set({ loading: true, error: null });
     
     try {
       console.log('🔐 Procesando login para:', email);
       
-      // CREDENCIALES DE PRUEBA (modo desarrollo)
-      const testCredentials = [
-        { email: 'prueba@correo.com', password: '123456' },
-        { email: 'admin@logistica.com', password: 'admin123' },
-        { email: 'test@example.com', password: 'test123' },
-        { email: 'user@example.com', password: 'password' }
+      // Simular delay de red
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Credenciales válidas
+      const validUsers = [
+        { email: 'prueba@correo.com', password: '123456', name: 'Usuario Prueba', role: 'admin' },
+        { email: 'admin@logistica.com', password: 'admin123', name: 'Administrador', role: 'superadmin' },
+        { email: 'test@example.com', password: 'test123', name: 'Test User', role: 'user' },
       ];
       
-      // Verificar si es un usuario de prueba
-      const isTestUser = testCredentials.some(
-        cred => cred.email === email && cred.password === password
+      const userFound = validUsers.find(
+        user => user.email === email && user.password === password
       );
       
-      if (isTestUser) {
-        console.log('✅ Login de prueba exitoso');
-        
-        // Crear usuario simulado
-        const mockUser = {
-          id: 'dev-' + Date.now(),
-          email: email,
-          name: email.split('@')[0],
-          role: 'admin'
+      if (userFound) {
+        const user: User = {
+          id: 'user-' + Date.now(),
+          email: userFound.email,
+          name: userFound.name,
+          role: userFound.role
         };
         
         // Guardar en localStorage
-        localStorage.setItem('auth_user', JSON.stringify(mockUser));
-        localStorage.setItem('auth_token', 'dev-token-' + Date.now());
-        
-        // Pequeño delay para simular red
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        set({ 
-          user: mockUser,
-          loading: false 
-        });
-        
-        return;
-      }
-      
-      // Si no es usuario de prueba, intentar con Supabase REAL
-      console.log('🌐 Intentando autenticación real con Supabase...');
-      
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      
-      if (error) {
-        throw new Error(`Supabase: ${error.message}`);
-      }
-      
-      if (data.user) {
-        const user = {
-          id: data.user.id,
-          email: data.user.email || email,
-          name: data.user.user_metadata?.name || ''
-        };
-        
-        console.log('✅ Login Supabase exitoso:', user.email);
+        localStorage.setItem('auth_user', JSON.stringify(user));
         
         set({ 
           user,
           loading: false 
         });
+        
+        console.log('✅ Login exitoso:', user.email);
+        return;
       }
+      
+      throw new Error('Credenciales incorrectas. Usa: prueba@correo.com / 123456');
       
     } catch (err: any) {
       console.error('❌ Error en login:', err.message);
-      
-      // Mensajes de error amigables
-      let errorMessage = 'Error de autenticación';
-      
-      if (err.message.includes('Invalid login credentials')) {
-        errorMessage = 'Email o contraseña incorrectos';
-      } else if (err.message.includes('Email not confirmed')) {
-        errorMessage = 'Por favor confirma tu email primero';
-      } else if (err.message.includes('Supabase:')) {
-        errorMessage = err.message.replace('Supabase: ', '');
-      }
-      
       set({ 
-        error: errorMessage,
+        error: err.message,
         loading: false 
       });
-      
       throw err;
     }
   },
 
+  // Logout - MEJORADO: Limpiar todo
   logout: async () => {
-    try {
-      await supabase.auth.signOut();
-      console.log('✅ Sesión Supabase cerrada');
-    } catch (error) {
-      console.warn('⚠️ Error al cerrar sesión Supabase:', error);
-    }
+    console.log('👋 Ejecutando logout...');
     
-    // Limpiar localStorage
+    // Limpiar localStorage completamente
     localStorage.removeItem('auth_user');
     localStorage.removeItem('auth_token');
     
-    set({ user: null });
-    console.log('👋 Usuario deslogueado');
+    // Limpiar sessionStorage por si acaso
+    sessionStorage.clear();
+    
+    // Resetear el store
+    set({ 
+      user: null,
+      error: null,
+      loading: false 
+    });
+    
+    console.log('✅ Logout completo, usuario eliminado');
   },
 
+  // Función para limpiar todo (debug)
+  clearAuth: () => {
+    console.log('🧹 Limpiando autenticación...');
+    localStorage.clear();
+    sessionStorage.clear();
+    set({ user: null, error: null, loading: false });
+  },
+
+  // Limpiar errores
   clearError: () => {
     set({ error: null });
   }
