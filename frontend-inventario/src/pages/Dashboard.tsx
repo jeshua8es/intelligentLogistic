@@ -1,5 +1,5 @@
-// src/pages/Dashboard.tsx - VERSIÓN CORREGIDA
-import React from 'react'
+// src/pages/Dashboard.tsx - VERSIÓN ACTUALIZADA
+import React, { useState } from 'react'
 import { 
   Package, 
   Truck, 
@@ -12,42 +12,59 @@ import {
   ArrowUp,
   ArrowDown,
   Clock,
-  RefreshCw
+  RefreshCw,
+  ArrowLeft,
+  Grid,
+  List,
+  Plus
 } from 'lucide-react'
+import InventoryCRUD from '../components/InventoryCRUD' // Asegúrate de la ruta correcta
 
 const Dashboard: React.FC = () => {
+  const [currentView, setCurrentView] = useState<'dashboard' | 'inventory'>('dashboard')
+  const [selectedStat, setSelectedStat] = useState<string | null>(null)
+
   const stats = [
     { 
+      id: 'inventory',
       title: 'Inventario Total', 
       value: '1,248', 
       change: '+12.5%', 
       trend: 'up',
       icon: <Package className="h-5 w-5" />,
-      color: 'bg-blue-500'
+      color: 'bg-blue-500',
+      clickable: true,
+      description: 'Unidades en stock total'
     },
     { 
+      id: 'orders',
       title: 'Pedidos Hoy', 
       value: '56', 
       change: '+8.2%', 
       trend: 'up',
       icon: <ShoppingCart className="h-5 w-5" />,
-      color: 'bg-green-500'
+      color: 'bg-green-500',
+      clickable: true
     },
     { 
+      id: 'shipments',
       title: 'En Despacho', 
       value: '23', 
       change: '-3.1%', 
       trend: 'down',
       icon: <Truck className="h-5 w-5" />,
-      color: 'bg-orange-500'
+      color: 'bg-orange-500',
+      clickable: true
     },
     { 
+      id: 'revenue',
       title: 'Ingresos Mensual', 
       value: '$24,580', 
       change: '+18.7%', 
       trend: 'up',
       icon: <DollarSign className="h-5 w-5" />,
-      color: 'bg-purple-500'
+      color: 'bg-purple-500',
+      clickable: false
     }
   ]
 
@@ -58,7 +75,18 @@ const Dashboard: React.FC = () => {
     { id: 4, action: 'Despacho programado', user: 'Ana Martínez', time: 'Hace 1 hora', status: 'info' },
   ]
 
-  return (
+  // Función para manejar clic en las tarjetas
+  const handleStatClick = (statId: string) => {
+    if (statId === 'inventory') {
+      setCurrentView('inventory')
+    } else if (statId === 'orders') {
+      // Aquí podrías navegar a la vista de pedidos
+      alert(`Navegar a vista de ${statId}`)
+    }
+  }
+
+  // Vista del Dashboard principal
+  const renderDashboardView = () => (
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
@@ -70,17 +98,23 @@ const Dashboard: React.FC = () => {
           <div className="text-sm text-gray-500">
             Actualizado: {new Date().toLocaleTimeString()}
           </div>
-          <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+          <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center">
             <RefreshCw className="h-4 w-4 inline mr-2" />
             Actualizar
           </button>
         </div>
       </div>
 
-      {/* Stats Grid */}
+      {/* Stats Grid - AHORA CON CLICK EN INVENTARIO */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat, index) => (
-          <div key={index} className="bg-white rounded-xl shadow-md p-6 border border-gray-200">
+        {stats.map((stat) => (
+          <div 
+            key={stat.id}
+            className={`bg-white rounded-xl shadow-md p-6 border border-gray-200 hover:shadow-lg transition-shadow ${
+              stat.clickable ? 'cursor-pointer hover:border-blue-300' : ''
+            }`}
+            onClick={() => stat.clickable && handleStatClick(stat.id)}
+          >
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <p className="text-sm font-medium text-gray-600">{stat.title}</p>
@@ -92,6 +126,11 @@ const Dashboard: React.FC = () => {
                   </div>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">vs mes anterior</p>
+                {stat.clickable && (
+                  <p className="text-xs text-blue-600 mt-2 font-medium">
+                    Click para ver detalles →
+                  </p>
+                )}
               </div>
               <div className={`${stat.color} p-3 rounded-xl text-white shadow-sm`}>
                 {stat.icon}
@@ -140,9 +179,12 @@ const Dashboard: React.FC = () => {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Acciones Rápidas</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <button className="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+              <button 
+                className="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                onClick={() => setCurrentView('inventory')}
+              >
                 <Package className="h-6 w-6 text-blue-600 mb-2" />
-                <span className="text-sm font-medium">Nuevo Producto</span>
+                <span className="text-sm font-medium">Gestionar Inventario</span>
               </button>
               <button className="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                 <ShoppingCart className="h-6 w-6 text-green-600 mb-2" />
@@ -217,6 +259,12 @@ const Dashboard: React.FC = () => {
                 </div>
               </div>
             </div>
+            <button 
+              className="w-full mt-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 font-medium"
+              onClick={() => setCurrentView('inventory')}
+            >
+              Ver inventario detallado
+            </button>
           </div>
 
           {/* Alerts */}
@@ -237,10 +285,63 @@ const Dashboard: React.FC = () => {
                   <p className="text-xs text-gray-600">Programar para hoy</p>
                 </div>
               </div>
+              <div className="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg">
+                <Package className="h-5 w-5 text-green-600 mr-3" />
+                <div>
+                  <p className="font-medium text-sm text-gray-900">Inventario actualizado</p>
+                  <p className="text-xs text-gray-600">Hace 30 minutos</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
+    </div>
+  )
+
+  // Vista del InventoryCRUD
+  const renderInventoryView = () => (
+    <div className="p-6">
+      {/* Header del Inventory */}
+      <div className="mb-6">
+        <button 
+          onClick={() => setCurrentView('dashboard')}
+          className="flex items-center text-blue-600 hover:text-blue-800 font-medium mb-4"
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Volver al Dashboard
+        </button>
+        
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Gestión de Inventario</h1>
+            <p className="text-gray-600">CRUD completo usando tus funciones Supabase</p>
+          </div>
+          <div className="flex items-center space-x-3">
+            <button 
+              onClick={() => setCurrentView('dashboard')}
+              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center"
+            >
+              <Grid className="h-4 w-4 mr-2" />
+              Dashboard
+            </button>
+            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center">
+              <Plus className="h-4 w-4 mr-2" />
+              Nuevo Producto
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Aquí se renderiza tu componente InventoryCRUD */}
+      <InventoryCRUD />
+    </div>
+  )
+
+  // Renderizar la vista actual
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {currentView === 'dashboard' ? renderDashboardView() : renderInventoryView()}
     </div>
   )
 }
